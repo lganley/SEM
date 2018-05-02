@@ -1,0 +1,85 @@
+---
+title: "Oblique vs. Surface tows"
+output:
+  pdf_document: default
+  word_document: default
+---
+```{r echo = FALSE, message=FALSE, warning=FALSE, include = FALSE, results = "hide"}
+source("/Users/laura.ganley001/Documents/R_Projects/SEM/variable_workup.R")
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE, include = FALSE, results = "hide"}
+library(lubridate)
+library(imputeTS)
+library(tseries)
+library(forecast)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggmap)
+library(maptools)
+```
+
+Are surface tows indicative of what is in the water column at regular stations in CCB?
+The linear models between surface and oblique tows of Calanus and Centropages are significant with a pretty good correlation.  The fit between surface and oblique
+tows of Mean total zpl and Pseudocalanus are not very strong, but all of the relationships
+are significant.
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(oblq_sfc, aes(x=MeanTotalZplm3sfc, y = MeanTotalZplm3oblq)) +
+  geom_point() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Month) +
+  xlab("Monthly Mean Total Zpl surface tows regular stations") +
+  ylab("Monthly Mean Total Zpl oblique tows regular stations")
+
+mtz_sfc_oblq_lm <- lm(MeanTotalZplm3oblq ~ MeanTotalZplm3sfc, oblq_sfc)
+```
+
+```{r warning = FALSE, echo = FALSE}
+summary(mtz_sfc_oblq_lm)
+```
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(oblq_sfc, aes(x=MeanCalanusm3sfc, y = MeanCalanusm3oblq)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  xlab("Monthly Mean Calanus surface tows regular stations") +
+  ylab("Monthly Mean Calanus oblique tows regular stations")
+
+calanus_sfc_oblq_lm <- lm(MeanCalanusm3oblq ~ MeanCalanusm3sfc, oblq_sfc)
+```
+
+```{r warning = FALSE, echo = FALSE}
+summary(calanus_sfc_oblq_lm)
+```
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(oblq_sfc, aes(x=MeanPseudom3sfc, y = MeanPseudom3oblq)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  xlab("Monthly Mean Pseudocalanus surface tows regular stations") +
+  ylab("Monthly Mean Pseudocalanus oblique tows regular stations")
+
+pseudo_sfc_oblq_lm <- lm(MeanPseudom3oblq ~ MeanPseudom3sfc, oblq_sfc)
+```
+
+```{r echo = FALSE, warning = FALSE}
+summary(pseudo_sfc_oblq_lm)
+```
+
+```{r echo = FALSE, warning = FALSE}
+ggplot(oblq_sfc, aes(x=MeanCentrom3sfc, y =  MeanCentrom3oblq)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  xlab("Monthly Mean Centropages surface tows regular stations") +
+  ylab("Monthly Mean Centropages oblique tows regular stations")
+
+centro_sfc_oblq_lm <- lm(MeanCentrom3oblq ~ MeanCentrom3sfc, oblq_sfc)
+```
+
+```{r echo = FALSE, warning = FALSE}
+
+summary(centro_sfc_oblq_lm)
+
+```

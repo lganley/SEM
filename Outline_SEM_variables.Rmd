@@ -1,0 +1,449 @@
+---
+title: "SEM_variables"
+author: "Laura Ganley"
+date: "4/5/2018"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r echo = FALSE, warning = FALSE, message = FALSE, results = "hide", fig.keep = 'none'}
+source("/Users/laura.ganley001/Documents/R_Projects/SEM/variable_workup.R")
+
+library(lubridate)
+library(imputeTS)
+library(tseries)
+library(forecast)
+library(ggplot2)
+library(ggmap)
+library(maptools)
+library(maps)
+library(geosphere)
+library(grid)
+library(TSA)
+library(ggsn)
+library(brms)
+library(piecewiseSEM)
+```
+
+#Map of the data
+```{r echo = FALSE, warning = FALSE, fig.height = 8, fig.width = 8}
+grid.newpage()
+vp_b <- viewport(width = 1, height = 1, x = 0.5, y = 0.5)  # the larger map
+vp_a <- viewport(width = 0.4, height = 0.37, x = 0.19, y = 0.77)  # the inset in upper left
+print(east.map.auto +maptheme2 , vp = vp_b)
+print(ccb_zoom +maptheme, vp = vp_a)
+```
+
+#Correlations between data sources with holes
+##Local Wind Direction at the Boston buoy, Gloucester buoy, and Provincetown airport
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+local_wind_direc
+```
+These confidence intervals overlap 1 so we can assume a 1:1 relationship.
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+confint(wind_direc_local_lm)
+```
+
+##Local Wind Speed at the Boston buoy, Gloucester buoy, and Provincetown airport
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+local_wind_spd
+```
+
+The confidence intervals don't quite overlap 1
+```{r echo = FALSE, message = FALSE, echo = FALSE}
+confint(wind_spd_local_lm)
+```
+
+##Regional wind direction at GOM buoy and Mattinicus rock
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+regional_wind_direc
+```
+
+These confidence intervals don't quite overlap 1.
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+confint(wind_direc_regional_lm)
+```
+
+##Regional wind speed at GOM buoy and Mattinicus rock
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+regional_wind_spd
+```
+
+These confidence intervals overlap 1
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+confint(wind_spd_regional_lm)
+```
+
+##Regional calanus
+The correlation between these two data sets is quite low and not significant.  I suspect
+this is due to the CPR data counts being from CV-VI and the Ecomon counting all Calanus.
+However, I have not determined this is the case definitively.  In addition, these data
+are not normally distributed, so I tried a GLM with a poisson distribution but R is 
+unhappy because they are monthly means and therefore not integers which would play
+nicer with a poisson distribution.  I could try log transforming the data to satisfy
+normality.
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+cpr_ecomon_north
+```
+
+##Regional stratification
+
+#Interpolations
+##Regional Calanus finmarchicus
+Currently it seems like using ecomon data to fill in missing cpr data may not work
+so I tried interpolating some of the missing data points by seasonally differencing the data, fitting an arima, and then using the arima in a Kalman Smoother. These data were not log transformed prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+autoplot(cpr.interpolate, series="Interpolated") +
+  autolayer(cpr.ts, series= "Original") +
+  scale_color_manual(values=c(`Interpolated`="red",`Original`="gray")) +
+  ylab("Monthly means of Calanus finmarchicus/100m3 CPR") +
+  theme(legend.position = c(0.1, 0.93), legend.title = element_blank())
+```
+
+##Log transformed Regional Calanus finmarchicus
+After speaking with David Degras it seems that log transforming before
+interpolating may work better here is the plot of data that were first
+log transformed, then differenced, then fit an arima, then interpolated with a kalman smoother.  I back transformed the data for this plot
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+autoplot(ts(x.impute1), series="Interpolated") +
+  autolayer(cpr.ts, series= "Original") +
+  scale_color_manual(values=c(`Interpolated`="red",`Original`="gray")) +
+  ylab("CPR data (log transformed before interpolation)") +
+  theme(legend.position = c(0.1, 0.93), legend.title = element_blank())
+```
+
+
+
+##Local Calanus finmarchicus
+I tried interpolating the three missing data points by seasonally differencing the data, fitting an arima, and then using the arima in a Kalman Smoother. These data may benefit from first being log transformed before differencing, fitting, and smoothing. This interpolation doesn't look as good but that is because most of the missing data is from June - December which is not part of the data collected so the model has nothing to go off of.  
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+autoplot(ccb_interpolation, series = "Interpolated") +
+  autolayer(ccb.calanus.ts, series = "Original") +
+  scale_color_manual(values = c('Interpolated' = "red", 'Original' = "gray")) +
+  theme(legend.position = c(0.1, 0.93), legend.title = element_blank())
+```
+
+##Log transformed local Calanus finmarchicus
+After speaking with David Degras it seems that log transforming before
+interpolating may work better here is the plot of data that were first
+log transformed, then fit an arima, then interpolated with a kalman smoother.  The best arima model did NOT include difference so these data were not differenced prior to interpolation.  I back transformed the data for this plot.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+autoplot(ts(x.imputeccb), series="Interpolated") +
+  autolayer(ccb.calanus.ts, series= "Original") +
+  scale_color_manual(values=c(`Interpolated`="red",`Original`="gray")) +
+  ylab("CCB data (log transformed before interpolation)") +
+  theme(legend.position = c(0.1, 0.93), legend.title = element_blank())
+```
+
+
+##Local stratification
+There were a few missing data points from the local stratification 
+data even after using data from the CCS habitat team, 
+CCS water quality team, and MWRA.
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+autoplot(ts(ccb.strat.interpolate[,1]), series="Interpolated") +
+  autolayer(ts(ccb.strat.interpolate[,4]), series= "Original") +
+  scale_color_manual(values=c(`Interpolated`="red",`Original`="gray")) +
+  ylab("CCB Monthly Mean Calanus finmarchicus/100m3") +
+  theme(legend.position = c(0.1, 0.93), legend.title = element_blank())
+```
+
+#Time lags
+##Determine the time lag between the regional interpolated Calanus finmarchicus data (CPR) and the interpolated CCB Calanus finmarchicus data from 1998 - 2013 (CPR data ends in 2013).  
+To do a cross correlation you must 
+1.) difference the data then
+2.) fit an arima for the input variable (CPR)
+
+```{r message = FALSE, warning = FALSE}
+cpr.arima <- auto.arima(log.ccb.cpr.2013[,1], xreg =  time(log.ccb.cpr.2013[,1]), D = 1,stepwise = FALSE, approximation = FALSE)
+checkresiduals(cpr.arima)
+## residuals look good
+```
+
+3.) use the arima model to prewhiten and do the cross correlation
+There are positive (above average CPR leads to above average CCB calanus) lags at 2
+and 13 months
+There are negative (above average CPR leads to below average CCB calanus) lags at 3
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ccb_cpr_cross_corr <- TSA::prewhiten(log.ccb.cpr.2013[2:185, 3], 
+                                    log.ccb.cpr.2013[2:185, 4],
+                                     x.model = cpr.arima, 
+                                     main = "CCB Calanus Lags CPR Calanus")
+```
+
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+knitr::kable(CCB_CPR_lag, col.names = c("Lag time", "AICc"), caption = "AICc scores
+ for ARIMA models with adaquete goodness-of-fit for CCB Calanus finmarchicus abundance lagging the interpolated CPR data. The best model appears to be with a lag of 1 year.")
+```
+This shows the best model is at 13 months which is counter to what the CCF says
+
+#Determine the time lag between AO and NAO
+I began by checking if the data need differencing. It looks like it doesn't need
+differencing
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+par(mfrow = c(1,1))
+acf(NAO_AO[,4], main = "NAO acf")
+pacf(NAO_AO[,4], main = "NAO pacf")
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+adf.test(NAO_AO.ts[ , 4], alternative = "stationary") ## this p-value is small 
+##and suggests differencing is not required the data are stationary
+kpss.test(NAO_AO.ts[ , 4]) ## this p-value is large and suggests differencing is 
+##not required the data are stationary
+Box.test(NAO_AO.ts[ , 4], type="Ljung-Box") ## p-value greater than .05 and 
+##suggests differencing is not necessary
+```
+
+Check if differncing is necessary for the AO.  
+The acf has some issues and the Ljung-Box test shows an issue, but the ADF 
+and KPSS tests show the data are stationary.
+
+```{r echo= FALSE, message = FALSE, warning = FALSE}
+par(mfrow=c(1,1))
+acf(NAO_AO[,3], main = "AO acf")
+pacf(NAO_AO[,3], main= "AO pacf")
+```
+
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+adf.test(NAO_AO.ts[, 3], alternative = "stationary") ## this p-value is small 
+##and suggests differencing is not required the data are stationary
+kpss.test(NAO_AO.ts[ , 3]) ## thsi p-value is large and suggests differencing
+## is not required the data are stationary
+Box.test(NAO_AO.ts[ , 3], type="Ljung-Box") ## p-value less than .05
+## and suggests data should be differenced
+```
+
+2.) fit an arima for the input variable (AO)
+```{r message = FALSE, warning = FALSE}
+ao.arima <- auto.arima(NAO_AO.df$AO_index, xreg =  time(NAO_AO.df$AO_index), D = 1,
+                        stepwise = FALSE, approximation = FALSE)
+  
+## residuals look good
+checkresiduals(ao.arima)
+```
+
+3.) use the arima model to prewhiten and do the cross correlation
+```{r message = FALSE, warning = FALSE, echo = FALSE}
+ao.nao.corr <- TSA::prewhiten(NAO_AO_diff[,2], 
+                                     NAO_AO_diff[,1],
+                                     x.model = ao.arima, 
+                                     main = "NAO Lags AO")
+```
+The cross correlation shows that the most dominant cross correlations occur at +1 and -1.  So, I think this means 
+there is no lag
+
+#Determine time lag between NAO and CPR
+2.) fit an arima for the input variable (NAO)
+```{r message = FALSE, warning = FALSE}
+
+nao.arima <- auto.arima(NAO_AO.df$NAO_index, xreg =  time(NAO_AO.df$NAO_index), D = 1,
+                        stepwise = FALSE, approximation = FALSE)
+
+checkresiduals(nao.arima)
+## residuals look good except signif spike at lag 12 still.
+```
+
+3.) use the arima model to prewhiten and do the cross correlation
+There are positive (above average NAO leads to above average CPR) lags at 5, 42, 52
+There are negative (above average NAO leads to below average CPR) lags at 4,16, 28 
+
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+nao.cpr.cross.corr <- TSA::prewhiten(NAO_AO_diff[, 1], 
+                                     log.ccb.cpr.2013[, 3],
+                                     x.model = nao.arima, lag.max = 100, 
+                                     main = "NAO Lags CPR Calanus")
+
+```
+
+I did an ARIMA for the NAO with the log transformed 
+differenced CPR data.  For both predictors the lag of 72 months was 
+the best model. The cross correlation doesn't indicate 72 months for the NAO.
+This doesn't match with teh cross correlation because the cross correlation
+is prewhitened and this model is not using prewhitened data.
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+knitr::kable(NAO_CPR_lag, col.names = c("Lag time", "AICc"), caption = "AICc 
+scores for ARIMA models with the monthly NAO lagging the interpolated CPR 
+data. The best model appears to be with a lag of 6 years, 
+however in the literature the best models are usually 2-4 years. All models
+showed adaquete goodness-of-fit.")
+```
+
+
+
+#Determine time lag between AO and CPR
+3.) use the arima model fit above to prewhiten and do the cross correlation
+There are positive (above average AO leads to above average CPR) lags at 3, 5, 42, 
+46, and 52
+There are negative (above average AO leads to below average CPR) lags at 4, 45, and 
+100 
+
+```{r message = FALSE, echo = FALSE, warning = FALSE}
+ao.cpr.cross.corr <- TSA::prewhiten(NAO_AO_diff[, 2], 
+                                     log.ccb.cpr.2013[, 3],
+                                     x.model = ao.arima, lag.max = 100, 
+                                     main = "AO Lags CPR Calanus")
+```
+
+
+```{r warning = FALSE, message = FALSE, echo = FALSE}
+knitr::kable(AO_CPR_lag, col.names = c("Lag time", "AICc"), caption = "AICc scores
+             for ARIMA models for AO lagging the interpolated CPR data. 
+             The best model appears to be with a lag of 6 years. All models showed
+             adaquete goodness-of-fit ")
+```
+
+
+
+#Trends
+Is there a trend in the pseudocalanus data?
+Try a moving average only use the "in-season" data
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ma.pseudo 
+```
+
+
+Is there a trend in ccb calanus data? Moving average smoothed over 12 months.  It looks like 
+ there was an increasing trend that dropped off after 2011 only use the "in-season" data
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ma.cfin 
+```
+
+
+Is there a trend in the CPR data? Try a moving average
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ma.cpr 
+```
+
+Is there a trend in the MTZ data? Try a moving average
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ma.mtz
+```
+
+Is there a trend in the Centropages typicus data? Try a moving average
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+ma.centro
+```
+
+
+#Monthly data 
+
+## Local wind direction for every month of every year
+```{r warning = FALSE, message = FALSE, echo = FALSE, fig.height = 7}
+all_local_wind_direc
+```
+
+## Local wind speed for every month of every year
+```{r warning = FALSE, message = FALSE, echo = FALSE, fig.height = 7}
+all_local_wind_spd
+```
+
+##Regional wind direction for every month of every year
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+all_regional_wind_direc
+```
+
+##Regional wind speed for every month of every year
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+all_regional_wind_spd
+```
+
+##Local stratification
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+local_strat
+```
+
+##Local Calanus finmarchicus not log transformed prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+ccb.calanus.orig.interp.plot.non
+```
+
+##Local Calanus finmarchicus log transformed prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+ccb.calanus.orig.interp.plot
+```
+
+##Local Mean Total Zooplankton log transformed (not diff) prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+ccb.mtz.orig.interp.plot
+```
+
+##Local Pseudocalanus log transformed (not diff) prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+ccb.pseudo.orig.interp.plot
+```
+
+##Local Centropages log transformed (not diff) prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+ccb.centro.orig.interp.plot
+```
+
+
+The residuals for the non-log transformed models of MTZ, Pseudocalanus, 
+and Centropages are not good so I didn't bother interpolating from
+those models.
+
+
+##Regional Calanus finmarchicus log transformed prior to interpolation
+```{r echo = FALSE, warning = FALSE, message = FALSE, fig.height = 7}
+cpr.calanus.orig.interp.plot
+```
+
+##Regional and local Calanus finmarchicus (both log transformed)
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.height = 7}
+cpr.ccb.plot
+```
+
+##Concentration Index
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.height = 7}
+concentration.index.plot
+```
+
+## Relationship between stratification and patchiness
+```{r echo = FALSE, message = FALSE, warning = FALSE, fig.height = 5}
+centropatch.strat
+pseudopatch.strat
+calpatch.strat
+mtzpatch.strat
+```
+
+
+#TRY AN SEM
+```{r}
+eg_mod <- bf(eg.abund ~ log(MTZ.sq) + log(MTZ.sq) * log(CCBStrat))
+local_strat_mod <- bf(log(CCBStrat) ~ RegWindDirec * RegWindSpd)
+mtz_mod <- bf(log(MTZ.sq) ~ RegWindDirec * RegWindSpd)
+reg_wind_spd_mod <- bf(RegWindSpd ~ NAO)
+reg_wind_direc_mod <- bf(RegWindDirec ~ NAO)
+
+
+k_fit_brms <- brm(eg_mod + 
+                  local_strat_mod +
+                  mtz_mod +
+                  reg_wind_spd_mod +
+                  reg_wind_direc_mod, 
+                  data=all.data, 
+                  cores=4, chains = 2)
+
+## how'd the model do?
+plot(k_fit_brms)
+summary(k_fit_brms)
+```
+
+#Problems to address
+1.) Ptwn airport wind data
+2.) waiting on caloric value data from Christy
+3.) 1998 and 1999 local and regional wind speed seem very high
+4.) Reg. Stratification isn't going to work out
+5.) waiting on calanus data from Jeff Runge
+6.) waiting on SST data
